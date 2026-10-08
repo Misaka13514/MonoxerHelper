@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">MonoxerHelper</string>
+    <string name="xposed_description">Show correct answers / auto-answer in Monoxer</string>
+</resources>
