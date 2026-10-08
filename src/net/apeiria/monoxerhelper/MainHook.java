@@ -20,10 +20,12 @@ import java.util.WeakHashMap;
  * app's classes, so the module bytecode must not reference them directly.
  *
  * <p>Answer overlay: hooks QuestionFragment.trySetup / BaseMiniTestFragment.trySetup and shows the
- * correct answer once a question is displayed. Auto answering: choice questions are auto-answered,
- * shuffle (narabekae) / dictation questions get the answer typed in and submitted;
- * QuestionResult.recordResult is forced to true and MiniTest submissions to full score as
- * catch-alls. Controls live in a persistent notification (see TargetNotification).
+ * correct answer once a question is displayed; hooks StartMiniTestFragment.onStart and shows a held
+ * test's passcode on its entry page (validated client-side against a plaintext copy, so it is
+ * readable locally). Auto answering: choice questions are auto-answered, shuffle (narabekae) /
+ * dictation questions get the answer typed in and submitted; QuestionResult.recordResult is forced
+ * to true and MiniTest submissions to full score as catch-alls. Controls live in a persistent
+ * notification (see TargetNotification).
  */
 public class MainHook implements IXposedHookLoadPackage {
 
@@ -147,6 +149,51 @@ public class MainHook implements IXposedHookLoadPackage {
                 AnswerOverlay.show(frag, text);
               }
               AutoAnswer.onMiniTestQuestionShown(frag, qa);
+            } catch (Throwable t) {
+              XposedBridge.log(t);
+            }
+          }
+        });
+
+    // ===== MiniTest passcode entry page: reveal the held test's passcode =====
+    // The passcode is checked client-side against MiniTestHeldTest.getPasscode() (plaintext,
+    // delivered by the server with the held-test info), so it can be read straight off the
+    // activity and shown in the same overlay, with the same toggle and gestures as answers.
+    hookSafely(
+        cl,
+        "com.monoxer.view.miniTest.tests.StartMiniTestFragment",
+        "onStart",
+        new XC_MethodHook() {
+          @Override
+          protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+            try {
+              Object frag = param.thisObject;
+              Activity activity = (Activity) XposedHelpers.callMethod(frag, "getActivity");
+              if (activity == null) {
+                return;
+              }
+              Prefs.attach(activity);
+              TargetNotification.start(activity);
+              Object heldTest = XposedHelpers.callMethod(activity, "getHeldTest");
+              String passcode =
+                  heldTest == null
+                      ? null
+                      : (String) XposedHelpers.callMethod(heldTest, "getPasscode");
+              if (passcode == null || passcode.isEmpty()) {
+                return; // this held test asks for no passcode
+              }
+              Object testInfo = XposedHelpers.callMethod(activity, "getTestInfo");
+              Object myResult =
+                  testInfo == null ? null : XposedHelpers.callMethod(testInfo, "getMyResult");
+              if (myResult != null) {
+                return; // already started for me: the page skips passcode entry
+              }
+              XposedBridge.log(TAG + "mini test passcode page: overlay=" + Prefs.showAnswer());
+              if (Prefs.showAnswer()) {
+                AnswerOverlay.show(frag, passcode);
+              } else {
+                AnswerOverlay.remember(frag, passcode);
+              }
             } catch (Throwable t) {
               XposedBridge.log(t);
             }

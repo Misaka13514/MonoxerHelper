@@ -107,6 +107,16 @@ public final class AnswerOverlay {
     }
   }
 
+  /**
+   * Records the payload for {@code fragment} without showing it, so {@link #reshow()} can reveal it
+   * later while the same page is still on screen. Needed for pages with no follow-up event (e.g.
+   * the MiniTest passcode page), where a mid-page re-enable would otherwise do nothing.
+   */
+  static void remember(Object fragment, String text) {
+    lastFrag = new WeakReference<>(fragment);
+    lastText = text;
+  }
+
   // ------------------------------------------------------------------
 
   private static FrameLayout.LayoutParams buildLayoutParams(Activity activity) {
