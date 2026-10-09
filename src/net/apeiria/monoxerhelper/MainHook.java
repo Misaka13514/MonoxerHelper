@@ -103,13 +103,15 @@ public class MainHook implements IXposedHookLoadPackage {
               if (question == null) {
                 return;
               }
+              Object answerNode = XposedHelpers.callMethod(question, "answerNode");
+              String text =
+                  answerNode == null
+                      ? null
+                      : (String) XposedHelpers.getObjectField(answerNode, "text");
               if (Prefs.showAnswer()) {
-                Object answerNode = XposedHelpers.callMethod(question, "answerNode");
-                String text =
-                    answerNode == null
-                        ? null
-                        : (String) XposedHelpers.getObjectField(answerNode, "text");
                 AnswerOverlay.show(frag, text);
+              } else {
+                AnswerOverlay.remember(frag, text); // re-enabling re-shows it for this question
               }
               AutoAnswer.onStudyQuestionShown(frag);
             } catch (Throwable t) {
@@ -144,9 +146,11 @@ public class MainHook implements IXposedHookLoadPackage {
               if (answer == null) {
                 return;
               }
+              String text = (String) XposedHelpers.callMethod(answer, "getAnswerText");
               if (Prefs.showAnswer()) {
-                String text = (String) XposedHelpers.callMethod(answer, "getAnswerText");
                 AnswerOverlay.show(frag, text);
+              } else {
+                AnswerOverlay.remember(frag, text); // re-enabling re-shows it for this question
               }
               AutoAnswer.onMiniTestQuestionShown(frag, qa);
             } catch (Throwable t) {

@@ -1,6 +1,8 @@
 package net.apeiria.monoxerhelper;
 
 import android.app.Activity;
+import android.content.Context;
+import android.graphics.Color;
 import android.graphics.Typeface;
 import android.os.Build;
 import android.os.SystemClock;
@@ -20,10 +22,10 @@ import java.lang.ref.WeakReference;
 /**
  * Shows the correct answer in a TextView overlaid on the Activity's DecorView.
  *
- * <p>Gestures: tap turns the overlay off (until re-enabled via the notification); double-tap
- * toggles auto answering (same persisted setting as the notification button); holding past the
- * long-press timeout and moving drags the overlay — the offset sticks for the rest of the app
- * session.
+ * <p>Gestures: tap is a panic stop — it hides the overlay and turns auto answering off (both until
+ * re-enabled via the notification); double-tap toggles auto answering (same persisted setting as
+ * the notification button); holding past the long-press timeout and moving drags the overlay — the
+ * offset sticks for the rest of the app session.
  */
 public final class AnswerOverlay {
 
@@ -39,10 +41,15 @@ public final class AnswerOverlay {
 
   private static String lastText;
 
-  /** Dragged offset applied to every overlay so the position sticks across questions. */
+  /**
+   * Dragged offset applied to every overlay so the position sticks across questions. Loaded from
+   * {@link Prefs} on first use and persisted on every drag; reset when the style is switched.
+   */
   private static float offsetX;
 
   private static float offsetY;
+
+  private static boolean offsetLoaded;
 
   private AnswerOverlay() {}
 
@@ -55,6 +62,7 @@ public final class AnswerOverlay {
       if (activity == null) {
         return;
       }
+      ensureOffsetLoaded();
       View decor = activity.getWindow().getDecorView();
       if (!(decor instanceof ViewGroup)) {
         return;
@@ -117,6 +125,33 @@ public final class AnswerOverlay {
     lastText = text;
   }
 
+  /** Reads the persisted drag offset once per process; never-dragged (NaN) means the default. */
+  private static void ensureOffsetLoaded() {
+    if (offsetLoaded) {
+      return;
+    }
+    offsetLoaded = true;
+    float x = Prefs.overlayOffsetX();
+    float y = Prefs.overlayOffsetY();
+    if (!Float.isNaN(x) && !Float.isNaN(y)) {
+      offsetX = x;
+      offsetY = y;
+    }
+  }
+
+  /** Puts the overlay back at the default spot (style switched) and forgets the persisted drag. */
+  static void resetPosition() {
+    offsetLoaded = true;
+    offsetX = 0;
+    offsetY = 0;
+    Prefs.resetOverlayOffset();
+    TextView tv = last == null ? null : last.get();
+    if (tv != null) {
+      tv.setTranslationX(0);
+      tv.setTranslationY(0);
+    }
+  }
+
   // ------------------------------------------------------------------
 
   private static FrameLayout.LayoutParams buildLayoutParams(Activity activity) {
@@ -154,17 +189,35 @@ public final class AnswerOverlay {
   private static TextView createOverlay(Activity activity) {
     TextView tv = new TextView(activity);
     tv.setTag(TAG);
-    tv.setBackgroundColor(BG_COLOR);
-    tv.setTextColor(TEXT_COLOR);
-    tv.setTypeface(Typeface.DEFAULT_BOLD);
-    tv.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
     tv.setMaxLines(4);
-    int padH = dp(activity, 12);
-    int padV = dp(activity, 6);
-    tv.setPadding(padH, padV, padH, padV);
     tv.setElevation(dp(activity, 8));
     tv.setOnTouchListener(new GestureListener(tv));
+    applyStyle(tv);
     return tv;
+  }
+
+  /** Re-styles the current overlay after the style was cycled from the notification. */
+  static void restyle() {
+    TextView tv = last == null ? null : last.get();
+    if (tv != null) {
+      applyStyle(tv);
+    }
+  }
+
+  /**
+   * Applies the current style: "bold" is a dark pill with bold yellow text; "plain" has no
+   * background at all and smaller black text. The padding is kept in both styles — with a
+   * transparent background it is invisible, but it preserves the gesture touch target.
+   */
+  private static void applyStyle(TextView tv) {
+    boolean plain = Prefs.overlayPlain();
+    tv.setBackgroundColor(plain ? Color.TRANSPARENT : BG_COLOR);
+    tv.setTextColor(plain ? 0xFF000000 : TEXT_COLOR);
+    tv.setTypeface(plain ? Typeface.DEFAULT : Typeface.DEFAULT_BOLD);
+    tv.setTextSize(TypedValue.COMPLEX_UNIT_SP, plain ? 12 : 15);
+    int padH = dp(tv.getContext(), 12);
+    int padV = dp(tv.getContext(), 6);
+    tv.setPadding(padH, padV, padH, padV);
   }
 
   /**
@@ -183,7 +236,9 @@ public final class AnswerOverlay {
         new Runnable() {
           @Override
           public void run() {
-            Prefs.setShow(false); // stays off until re-enabled via the notification
+            Prefs.setShow(false); // both stay off until re-enabled via the notification
+            Prefs.setAuto(false); // the tap is a panic stop: so is auto answering
+            AutoAnswer.cancelPending();
             view.setVisibility(View.GONE);
             TargetNotification.refresh();
           }
@@ -236,6 +291,7 @@ public final class AnswerOverlay {
           if (dragging) {
             offsetX = view.getTranslationX();
             offsetY = view.getTranslationY();
+            Prefs.setOverlayOffset(offsetX, offsetY); // survives app restarts
           } else if (!cancelledTap && event.getActionMasked() == MotionEvent.ACTION_UP) {
             handleTap(SystemClock.uptimeMillis());
           }
@@ -260,10 +316,10 @@ public final class AnswerOverlay {
 
   // ------------------------------------------------------------------
 
-  private static int dp(Activity activity, int v) {
+  private static int dp(Context context, int v) {
     return (int)
         TypedValue.applyDimension(
-            TypedValue.COMPLEX_UNIT_DIP, v, activity.getResources().getDisplayMetrics());
+            TypedValue.COMPLEX_UNIT_DIP, v, context.getResources().getDisplayMetrics());
   }
 
   private static Activity getActivity(Object fragment) {

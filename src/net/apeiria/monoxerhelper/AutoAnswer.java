@@ -102,6 +102,14 @@ public final class AutoAnswer {
       cancelPending();
       return;
     }
+    answerCurrent();
+  }
+
+  /**
+   * Answers the question currently on screen right away (auto answering just turned on, via the
+   * overlay double-tap or the notification button). No-op when no question is around any more.
+   */
+  static void answerCurrent() {
     Object frag = studyFrag == null ? null : studyFrag.get();
     if (frag != null) {
       dispatchStudy(frag, Prefs.delayMs());
@@ -170,6 +178,10 @@ public final class AutoAnswer {
           new Action() {
             @Override
             public void run(Object frag) throws Throwable {
+              Object status = XposedHelpers.callMethod(frag, "getMyAnswerStatus");
+              if (status != null && "Answered".equals(status.toString())) {
+                return; // same guard as the app's own choice buttons: never submit twice
+              }
               XposedHelpers.callMethod(frag, "onAnswer", ans);
             }
           },

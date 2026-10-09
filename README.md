@@ -8,26 +8,32 @@ shown while Monoxer is running.
 
 ## Features
 
-| Control                   | Behavior                                                                                                                                                                                                                                                                                                                                                                        |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Answer overlay            | After each question is shown, overlays a TextView below the status bar/cutout with the correct answer. Covers every study question type (multiple choice / shuffle (narabekae) / dictation / handwriting, etc.) and MiniTest.                                                                                                                                                   |
-| Fully automatic answering | Study mode: multiple-choice questions are auto-answered by clicking the correct option; shuffle/dictation questions get the answer typed in and submitted; all other types (text/decision/speaking/formula/handwriting) are forced correct on submit via `QuestionResult.recordResult`. MiniTest: choice questions are auto-answered; all other types get full score on submit. |
-| Answer delay              | Wait before auto-answering, cycled by a notification button: 0.4s / 1.2s / 3s. Values below roughly 1 second may trip the app's built-in mis-tap guard (retried automatically, up to 5 attempts).                                                                                                                                                                               |
-| MiniTest passcode         | On a MiniTest passcode entry page, the overlay shows the test's passcode (Monoxer validates it client-side against a plaintext copy delivered with the held-test info). Same show/hide toggle and gestures as the answer overlay; not shown when the test needs no passcode or was already started.                                                                             |
+- **Answer overlay** — the correct answer appears in a small overlay near the
+  top of the screen for every question: all study question types (multiple
+  choice, shuffle, dictation, handwriting, ...) plus MiniTest questions. Drag
+  it anywhere — the spot is remembered across app restarts — and give it one
+  of two looks from the notification: a dark pill with bold yellow text, or
+  bare black text with no background.
+- **Auto answering** — questions answer themselves. The right choice is
+  picked, shuffle and dictation answers are typed in and submitted, and the
+  study types that cannot be answered programmatically (text / decision /
+  speaking / formula / handwriting) come out correct when you submit them. In
+  MiniTest, choice questions are answered for you and the rest score full
+  marks on submit.
+- **Answer delay** — how long to wait before auto answering, cycled from the
+  notification: 0.4s / 1.2s / 3s. Below roughly 1 second the app's mis-tap
+  guard may reject a tap; the module retries quietly, up to 5 times.
+- **MiniTest passcode** — on a passcode entry page, the overlay shows the
+  test's passcode (nothing is shown when the test needs no passcode).
+- **Panic stop** — a single tap on the overlay hides it and turns auto
+  answering off instantly; re-enable either from the notification at any
+  time.
 
 Overlay gestures:
 
-- **Tap** — turn the overlay off until re-enabled via the notification (which
-  re-shows it for the current question).
-- **Double-tap** — toggle auto answering; same setting as the notification's
-  Auto button. Turning it on answers the question currently on screen right
-  away; turning it off cancels its pending answer.
-- **Long-press and drag** — move the overlay; the position sticks for the
-  rest of the app session.
-
-The control notification (toggle answers / toggle auto / cycle delay) appears
-as soon as Monoxer starts and stays until the app is stopped. It is posted by
-the hooked Monoxer process, so it needs Monoxer's notification permission.
+- **Tap** — panic stop: hide the overlay and turn auto answering off.
+- **Double-tap** — toggle auto answering.
+- **Long-press and drag** — move the overlay.
 
 ## Building
 

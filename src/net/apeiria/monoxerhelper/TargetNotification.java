@@ -13,8 +13,8 @@ import de.robv.android.xposed.XposedBridge;
 
 /**
  * Persistent status-bar notification with the module's controls: toggle the answer overlay, toggle
- * auto answering, and cycle the answer delay. It is the only settings surface — the module ships no
- * app UI.
+ * auto answering, cycle the answer delay, and cycle the overlay style. It is the only settings
+ * surface — the module ships no app UI.
  *
  * <p>Runs entirely inside the target app's process: notifications must be posted by the app whose
  * uid owns them, and the module app cannot be reached from here on Android 11+ (package
@@ -26,6 +26,7 @@ final class TargetNotification {
   private static final String ACTION_TOGGLE_SHOW = "net.apeiria.monoxerhelper.TOGGLE_SHOW";
   private static final String ACTION_TOGGLE_AUTO = "net.apeiria.monoxerhelper.TOGGLE_AUTO";
   private static final String ACTION_CYCLE_DELAY = "net.apeiria.monoxerhelper.CYCLE_DELAY";
+  private static final String ACTION_CYCLE_STYLE = "net.apeiria.monoxerhelper.CYCLE_STYLE";
 
   private static final String CHANNEL_ID = "monoxerhelper_controls";
   private static final int NOTIF_ID = 0x4D58; // "MX"
@@ -92,11 +93,17 @@ final class TargetNotification {
             } else if (ACTION_TOGGLE_AUTO.equals(action)) {
               boolean value = !Prefs.autoAnswer();
               Prefs.setAuto(value);
-              if (!value) {
+              if (value) {
+                AutoAnswer.answerCurrent(); // same as the overlay double-tap: answer now
+              } else {
                 AutoAnswer.cancelPending();
               }
             } else if (ACTION_CYCLE_DELAY.equals(action)) {
               Prefs.cycleDelay();
+            } else if (ACTION_CYCLE_STYLE.equals(action)) {
+              Prefs.setOverlayPlain(!Prefs.overlayPlain());
+              AnswerOverlay.restyle();
+              AnswerOverlay.resetPosition(); // fresh look, fresh spot
             } else {
               return;
             }
@@ -111,6 +118,7 @@ final class TargetNotification {
     IntentFilter filter = new IntentFilter(ACTION_TOGGLE_SHOW);
     filter.addAction(ACTION_TOGGLE_AUTO);
     filter.addAction(ACTION_CYCLE_DELAY);
+    filter.addAction(ACTION_CYCLE_STYLE);
     if (Build.VERSION.SDK_INT >= 33) {
       app.registerReceiver(RECEIVER, filter, Context.RECEIVER_NOT_EXPORTED);
     } else {
@@ -132,40 +140,48 @@ final class TargetNotification {
     }
   }
 
+  /**
+   * Tapping the notification itself toggles the answer overlay — the title says what a tap will do
+   * right now; the action row keeps the three buttons the shade actually shows: auto toggle, delay
+   * cycle, style cycle.
+   */
   private static Notification build() {
     boolean show = Prefs.showAnswer();
     boolean auto = Prefs.autoAnswer();
     return new Notification.Builder(app, CHANNEL_ID)
         .setSmallIcon(smallIcon())
-        .setContentTitle("MonoxerHelper")
+        .setContentTitle(
+            show ? "MonoxerHelper · tap to hide overlay" : "MonoxerHelper · tap to show overlay")
         .setContentText(
-            "Answers: "
-                + (show ? "ON" : "OFF")
-                + "  Auto: "
-                + (auto ? "ON" : "OFF")
-                + "  Delay: "
-                + delayLabel())
+            "Mode: "
+                + (auto ? "Auto" : "Manual")
+                + "   Delay: "
+                + delayLabel()
+                + "   Style: "
+                + styleLabel())
+        .setContentIntent(pending(ACTION_TOGGLE_SHOW))
         .setOngoing(true)
         .setOnlyAlertOnce(true)
         .setShowWhen(false)
         .addAction(
             new Notification.Action.Builder(
-                    0, "Answers: " + (show ? "ON" : "OFF"), pending(ACTION_TOGGLE_SHOW))
+                    0, auto ? "Auto" : "Manual", pending(ACTION_TOGGLE_AUTO))
                 .build())
         .addAction(
-            new Notification.Action.Builder(
-                    0, "Auto: " + (auto ? "ON" : "OFF"), pending(ACTION_TOGGLE_AUTO))
-                .build())
+            new Notification.Action.Builder(0, delayLabel(), pending(ACTION_CYCLE_DELAY)).build())
         .addAction(
-            new Notification.Action.Builder(
-                    0, "Delay: " + delayLabel(), pending(ACTION_CYCLE_DELAY))
-                .build())
+            new Notification.Action.Builder(0, styleLabel(), pending(ACTION_CYCLE_STYLE)).build())
         .build();
   }
 
+  private static String styleLabel() {
+    return Prefs.overlayPlain() ? "Plain" : "Bold";
+  }
+
+  /** Compact button label for the current delay, e.g. "0.4s" / "1.2s" / "3s". */
   private static String delayLabel() {
     int ms = Prefs.delayMs();
-    return ms < 1000 ? ms + "ms" : String.format(java.util.Locale.US, "%.1fs", ms / 1000f);
+    return String.format(java.util.Locale.US, "%.1fs", ms / 1000f).replace(".0s", "s");
   }
 
   /**

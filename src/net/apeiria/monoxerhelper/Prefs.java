@@ -14,6 +14,9 @@ public final class Prefs {
   private static final String KEY_SHOW = "show";
   private static final String KEY_AUTO = "auto";
   private static final String KEY_DELAY = "delay_ms";
+  private static final String KEY_PLAIN = "overlay_plain";
+  private static final String KEY_OFFSET_X = "overlay_offset_x";
+  private static final String KEY_OFFSET_Y = "overlay_offset_y";
 
   /** Selectable auto-answer delays (ms), cycled by a notification button. */
   static final int[] DELAY_STEPS_MS = {400, 1200, 3000};
@@ -21,6 +24,7 @@ public final class Prefs {
   private static final boolean DEFAULT_SHOW = true;
   private static final boolean DEFAULT_AUTO = false;
   private static final int DEFAULT_DELAY_MS = 1200;
+  private static final boolean DEFAULT_PLAIN = false;
 
   /** Application context of the target app. */
   private static Context app;
@@ -71,6 +75,37 @@ public final class Prefs {
     putInt(KEY_DELAY, DEFAULT_DELAY_MS);
   }
 
+  /** True when the overlay uses the bare style (transparent background, small black text). */
+  public static boolean overlayPlain() {
+    return get(KEY_PLAIN, DEFAULT_PLAIN);
+  }
+
+  public static void setOverlayPlain(boolean value) {
+    put(KEY_PLAIN, value);
+  }
+
+  /** Persisted overlay drag offset (screen px); NaN means "never dragged" (default position). */
+  public static float overlayOffsetX() {
+    return getFloat(KEY_OFFSET_X, Float.NaN);
+  }
+
+  public static float overlayOffsetY() {
+    return getFloat(KEY_OFFSET_Y, Float.NaN);
+  }
+
+  public static void setOverlayOffset(float x, float y) {
+    putFloat(KEY_OFFSET_X, x);
+    putFloat(KEY_OFFSET_Y, y);
+  }
+
+  /** Forgets the overlay offset: back to the default position. */
+  public static void resetOverlayOffset() {
+    try {
+      prefs().edit().remove(KEY_OFFSET_X).remove(KEY_OFFSET_Y).apply();
+    } catch (Throwable ignored) {
+    }
+  }
+
   // ------------------------------------------------------------------
 
   private static boolean get(String key, boolean def) {
@@ -91,6 +126,21 @@ public final class Prefs {
   private static void putInt(String key, int value) {
     try {
       prefs().edit().putInt(key, value).apply();
+    } catch (Throwable ignored) {
+    }
+  }
+
+  private static float getFloat(String key, float def) {
+    try {
+      return prefs().getFloat(key, def);
+    } catch (Throwable ignored) {
+      return def;
+    }
+  }
+
+  private static void putFloat(String key, float value) {
+    try {
+      prefs().edit().putFloat(key, value).apply();
     } catch (Throwable ignored) {
     }
   }
